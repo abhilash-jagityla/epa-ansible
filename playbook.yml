@@ -1,0 +1,51 @@
+---
+- name: Deploy Prometheus + Node Exporter + Grafana
+  hosts: monitoring
+  become: yes
+
+  vars:
+    docker_packages:
+      - docker.io
+      - docker-compose
+
+  tasks:
+    - name: Install apt prerequisites
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: Ensure docker service started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create project directory
+      file:
+        path: /opt/monitoring
+        state: directory
+        owner: "{{ ansible_user | default('root') }}"
+        mode: 0755
+
+    - name: Copy docker-compose file
+      copy:
+        src: files/docker-compose.yml
+        dest: /opt/monitoring/docker-compose.yml
+        owner: "{{ ansible_user | default('root') }}"
+        mode: 0644
+
+    - name: Copy optional Prometheus config (ignore if absent)
+      copy:
+        src: files/prometheus/prometheus.yml
+        dest: /opt/monitoring/prometheus/prometheus.yml
+        owner: "{{ ansible_user | default('root') }}"
+        mode: 0644
+      ignore_errors: yes
+
+    - name: Pull images & start stack
+      community.docker.docker_compose:
+        project_src: /opt/monitoring
+        state: present
+
